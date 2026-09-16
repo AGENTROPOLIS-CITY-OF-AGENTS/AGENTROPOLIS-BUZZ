@@ -1,0 +1,74 @@
+name: Pages
+
+on:
+  pull_request:
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  SITE_DIR: site
+
+jobs:
+  validate:
+    name: Validate static site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required files
+        run: |
+          set -euo pipefail
+          for f in index.html styles.css .nojekyll; do
+            test -f "$SITE_DIR/$f" || { echo "missing $SITE_DIR/$f"; exit 1; }
+          done
+      - name: Parse HTML and check local links
+        run: python3 "$SITE_DIR/validate.py" "$SITE_DIR"
+      - name: Scan site for credential-like strings
+        run: |
+          set -euo pipefail
+          if grep -rEn \
+            -e 'AKIA[0-9A-Z]{16}' \
+            -e 'ghp_[A-Za-z0-9]{36}' \
+            -e 'github_pat_[A-Za-z0-9_]{20,}' \
+            -e 'xox[baprs]-[A-Za-z0-9-]{10,}' \
+            -e 'sk-[A-Za-z0-9]{20,}' \
+            -e '-----BEGIN [A-Z ]*PRIVATE KEY-----' \
+            -e '(nsec|npub)1[a-z0-9]{50,}' \
+            "$SITE_DIR"; then
+            echo "credential-like string found in $SITE_DIR"; exit 1
+          fi
+          echo "secret scan clean"
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ env.SITE_DIR }}
+      - id: deployment
+        uses: actions/deploy-pages@v4
