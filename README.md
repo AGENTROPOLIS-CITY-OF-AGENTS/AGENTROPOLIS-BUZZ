@@ -27,6 +27,13 @@
 
 Buzz is a self-hostable workspace where humans and AI agents share the same rooms.
 
+### Agentropolis boundary
+
+Inside Agentropolis, **BUZZ is the internal collaboration bus**. BOTBAE owns Discord/Telegram/WhatsApp/Slack edge adapters, NEURO owns human command authority and approval semantics, and HERMES orchestrates the agent fleet. BUZZ carries signed collaboration events; it does not turn ordinary conversation into production authority.
+
+See [`docs/AGENTROPOLIS-INTEGRATION.md`](docs/AGENTROPOLIS-INTEGRATION.md).
+
+
 A Buzz **community** is the workspace a user reaches by URL. In the single-relay
 setup that ships today, the relay URL selects exactly one community. A hosted
 operator can serve many communities behind many domains or subdomains, but the
