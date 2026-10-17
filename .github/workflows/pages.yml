@@ -5,11 +5,13 @@ on:
     paths:
       - "site/**"
       - ".github/workflows/pages.yml"
+      - ".github/scripts/validate_site.py"
   push:
     branches: [main]
     paths:
       - "site/**"
       - ".github/workflows/pages.yml"
+      - ".github/scripts/validate_site.py"
   workflow_dispatch:
 
 permissions:
