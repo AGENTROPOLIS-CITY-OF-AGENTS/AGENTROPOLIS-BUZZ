@@ -20,7 +20,7 @@ class Checker(HTMLParser):
         self.stack: list[str] = []
         self.errors: list[str] = []
         self.ids: set[str] = set()
-        self.fragments: list[str] = []
+        self.fragments: list[tuple[Path, str]] = []
         self.has_lang = False
         self.has_viewport = False
         self.has_title = False
@@ -70,20 +70,28 @@ class Checker(HTMLParser):
             return
         if not parts.path:
             if parts.fragment:
-                self.fragments.append(parts.fragment)
+                self.fragments.append((self.path, parts.fragment))
             return
-        target = (self.root if parts.path.startswith("/") else self.path.parent) / parts.path.lstrip("/")
+        if parts.path.startswith("/"):
+            self.errors.append(
+                f"line {self.getpos()[0]}: root-relative link {href} breaks under a project Pages base path; use a relative path"
+            )
+            return
+        target = (self.path.parent / parts.path).resolve()
         if target.is_dir():
             target = target / "index.html"
         if not target.exists():
             self.errors.append(f"line {self.getpos()[0]}: broken local link {href}")
+        elif parts.fragment and target.suffix == ".html":
+            self.fragments.append((target, parts.fragment))
 
-    def finish(self) -> list[str]:
+    def finish(self, ids_by_page: dict[Path, set[str]]) -> list[str]:
         if self.stack:
             self.errors.append(f"unclosed tags: {self.stack}")
-        for frag in self.fragments:
-            if frag not in self.ids:
-                self.errors.append(f"missing anchor target #{frag}")
+        for target, frag in self.fragments:
+            if frag not in ids_by_page.get(target, set()):
+                where = "" if target == self.path else f" in {target.relative_to(self.root)}"
+                self.errors.append(f"missing anchor target #{frag}{where}")
         for ok, msg in (
             (self.has_lang, "<html lang> missing"),
             (self.has_viewport, "viewport meta missing"),
@@ -98,16 +106,21 @@ class Checker(HTMLParser):
 
 def main() -> int:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
-    pages = sorted(root.rglob("*.html"))
+    pages = sorted(p.resolve() for p in root.rglob("*.html"))
     if not pages:
         print(f"no HTML files under {root}")
         return 1
-    failed = False
+    checkers: list[Checker] = []
     for page in pages:
         checker = Checker(page, root)
         checker.feed(page.read_text(encoding="utf-8"))
         checker.close()
-        errors = checker.finish()
+        checkers.append(checker)
+    ids_by_page = {c.path: c.ids for c in checkers}
+    failed = False
+    for checker in checkers:
+        page = checker.path
+        errors = checker.finish(ids_by_page)
         rel = page.relative_to(root)
         if errors:
             failed = True
