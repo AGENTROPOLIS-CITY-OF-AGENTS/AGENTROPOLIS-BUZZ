@@ -35,7 +35,7 @@ jobs:
             test -f "$SITE_DIR/$f" || { echo "missing $SITE_DIR/$f"; exit 1; }
           done
       - name: Parse HTML and check local links
-        run: python3 "$SITE_DIR/validate.py" "$SITE_DIR"
+        run: python3 .github/scripts/validate_site.py "$SITE_DIR"
       - name: Scan site for credential-like strings
         run: |
           set -euo pipefail
@@ -54,7 +54,7 @@ jobs:
 
   deploy:
     name: Deploy to GitHub Pages
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
     permissions:
