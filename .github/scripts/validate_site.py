@@ -4,7 +4,7 @@
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 VOID = {
     "area", "base", "br", "col", "embed", "hr", "img", "input",
@@ -70,20 +70,22 @@ class Checker(HTMLParser):
             return
         if not parts.path:
             if parts.fragment:
-                self.fragments.append((self.path, parts.fragment))
+                self.fragments.append((self.path, unquote(parts.fragment)))
             return
         if parts.path.startswith("/"):
             self.errors.append(
                 f"line {self.getpos()[0]}: root-relative link {href} breaks under a project Pages base path; use a relative path"
             )
             return
-        target = (self.path.parent / parts.path).resolve()
+        target = (self.path.parent / unquote(parts.path)).resolve()
         if target.is_dir():
             target = target / "index.html"
-        if not target.exists():
+        if not target.is_relative_to(self.root):
+            self.errors.append(f"line {self.getpos()[0]}: link {href} escapes the site directory")
+        elif not target.exists():
             self.errors.append(f"line {self.getpos()[0]}: broken local link {href}")
         elif parts.fragment and target.suffix == ".html":
-            self.fragments.append((target, parts.fragment))
+            self.fragments.append((target, unquote(parts.fragment)))
 
     def finish(self, ids_by_page: dict[Path, set[str]]) -> list[str]:
         if self.stack:
